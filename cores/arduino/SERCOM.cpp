@@ -710,7 +710,7 @@ uint8_t SERCOM::readDataWIRE( void )
   }
 }
 
-void SERCOM::setTimeoutInMicrosWIRE(uint32_t timeout, bool reset_on_timeout);  {
+void SERCOM::setTimeoutInMicrosWIRE(uint32_t timeout, bool reset_on_timeout)  {
     timeout_us_WIRE = timeout;
     do_reset_on_timeout_WIRE = reset_on_timeout;
 }
