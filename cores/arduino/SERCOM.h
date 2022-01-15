@@ -23,6 +23,7 @@
 
 #define SERCOM_FREQ_REF      48000000
 #define SERCOM_NVIC_PRIORITY ((1<<__NVIC_PRIO_BITS) - 1)
+#define DEFAULT_TIMEOUT_WIRE 0ul
 
 typedef enum
 {
@@ -212,12 +213,18 @@ class SERCOM
     bool isRXNackReceivedWIRE( void ) ;
 		int availableWIRE( void ) ;
 		uint8_t readDataWIRE( void ) ;
+		void setTimeoutInMicrosWIRE(uint32_t, bool);
+		bool hasTimedout( bool );
 
 	private:
 		Sercom* sercom;
 		uint8_t calculateBaudrateSynchronous(uint32_t baudrate) ;
 		uint32_t division(uint32_t dividend, uint32_t divisor) ;
 		void initClockNVIC( void ) ;
+        void handleTimeoutWIRE( void );
+		uint32_t timeout_us_WIRE ;
+		bool do_reset_on_timeout_WIRE ;
+		bool timed_out_WIRE ;
 
 		// Flag set when data is loaded into sercom->USART.DATA.reg.
 		// Helps with preventing UART lockups when flushing on startup

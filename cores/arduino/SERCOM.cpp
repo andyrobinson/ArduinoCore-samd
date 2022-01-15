@@ -29,6 +29,9 @@
 SERCOM::SERCOM(Sercom* s)
 {
   sercom = s;
+  timeout_us_WIRE = DEFAULT_TIMEOUT_WIRE;
+  do_reset_on_timeout_WIRE = false;
+  timed_out_WIRE = false;
 }
 
 /* 	=========================
@@ -384,6 +387,8 @@ void SERCOM::resetWIRE()
 
 void SERCOM::enableWIRE()
 {
+  // no longer timed out
+  timed_out_WIRE = false;
   // I2C Master and Slave modes share the ENABLE bit function.
 
   // Enable the I2C master mode
@@ -522,9 +527,15 @@ bool SERCOM::startTransmissionWIRE(uint8_t address, SercomWireReadWriteFlag flag
   // Address Transmitted
   if ( flag == WIRE_WRITE_FLAG ) // Write mode
   {
+    uint32_t startMicros = micros();
     while( !sercom->I2CM.INTFLAG.bit.MB )
     {
       // Wait transmission complete
+      if((timeout_us_WIRE > 0ul) && ((micros() - startMicros) > timeout_us_WIRE)) {
+        handleTimeoutWIRE();
+        return false;
+      }
+
     }
     // Check for loss of arbitration (multiple masters starting communication at the same time)
     if(!isBusOwnerWIRE())
@@ -535,8 +546,14 @@ bool SERCOM::startTransmissionWIRE(uint8_t address, SercomWireReadWriteFlag flag
   }
   else  // Read mode
   {
+    uint32_t startMicros = micros();
     while( !sercom->I2CM.INTFLAG.bit.SB )
     {
+        if((timeout_us_WIRE > 0ul) && ((micros() - startMicros) > timeout_us_WIRE)) {
+          handleTimeoutWIRE();
+          return false;
+        }
+
         // If the slave NACKS the address, the MB bit will be set.
         // In that case, send a stop condition and return false.
         if (sercom->I2CM.INTFLAG.bit.MB) {
@@ -568,7 +585,13 @@ bool SERCOM::sendDataMasterWIRE(uint8_t data)
   sercom->I2CM.DATA.bit.DATA = data;
 
   //Wait transmission successful
+  uint32_t startMicros = micros();
   while(!sercom->I2CM.INTFLAG.bit.MB) {
+
+    if((timeout_us_WIRE > 0ul) && ((micros() - startMicros) > timeout_us_WIRE)) {
+      handleTimeoutWIRE();
+      return false;
+    }
 
     // If a bus error occurs, the MB bit may never be set.
     // Check the bus error bit and ARBLOST bit and bail if either is set.
@@ -668,9 +691,15 @@ uint8_t SERCOM::readDataWIRE( void )
 {
   if(isMasterWIRE())
   {
+    uint32_t startMicros = micros();
     while( sercom->I2CM.INTFLAG.bit.SB == 0 && sercom->I2CM.INTFLAG.bit.MB == 0 )
     {
       // Waiting complete receive
+      // adding timeout
+      if((timeout_us_WIRE > 0ul) && ((micros() - startMicros) > timeout_us_WIRE)) {
+        handleTimeoutWIRE();
+        return (0); // calling routine would need to test for timeout
+      }
     }
 
     return sercom->I2CM.DATA.bit.DATA ;
@@ -679,6 +708,25 @@ uint8_t SERCOM::readDataWIRE( void )
   {
     return sercom->I2CS.DATA.reg ;
   }
+}
+
+void SERCOM::setTimeoutInMicrosWIRE(uint32_t timeout, bool reset_on_timeout);  {
+    timeout_us_WIRE = timeout;
+    do_reset_on_timeout_WIRE = reset_on_timeout;
+}
+
+void SERCOM::handleTimeoutWIRE( void ) {
+    timed_out_WIRE = true;
+
+    if (do_reset_on_timeout_WIRE) {
+        resetWIRE();
+    }
+}
+
+bool SERCOM::hasTimedout( bool clear) {
+    bool result = timed_out_WIRE;
+    if (clear) { timed_out_WIRE = false; }
+    return result;
 }
 
 
